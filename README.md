@@ -1,0 +1,84 @@
+# AI Quota Studio
+
+A native macOS **menu bar** app and **WidgetKit widgets** for the desktop and Notification Center
+that show 5-hour, weekly and monthly quota usage for **Claude Code**, **Antigravity (AGY)** and
+**Codex** — written in **100% Swift**.
+
+---
+
+## ✨ Features
+
+- 🧭 **Menu bar icon:** all quotas at a glance in a compact popover, no Dock icon.
+- ⚡️ **Native Swift:** self-contained data collection, no Python scripts, external dependencies
+  or system daemons.
+- ⏱ **Live quotas:** 5-hour and 7-day windows for Claude Code and Antigravity (Gemini / Claude /
+  GPT); Codex windows are 5 hours and a week, or a month on the free plan.
+- 🕒 **Countdowns:** time until each window resets; widgets and the menu tick every minute and
+  drop the bar to 0% once a window resets.
+- 🩺 **Clear errors:** if a CLI is missing or signed out, the menu and the widget say so instead
+  of showing an empty card.
+- 🌐 **Languages:** English (default) and Russian, switchable in Settings.
+- ⚙️ **Settings:** refresh interval (1 minute to 1 hour) and launch at login.
+- 🎨 **Widget sizes:** Small and Medium (Antigravity also Large), dark and light appearance.
+
+---
+
+## 🚀 Quick start
+
+### 0. Requirements
+- macOS 26.5+.
+- Installed and signed-in CLIs: `claude` (Claude Code), `agy` (Antigravity) and/or `codex`
+  (Codex). The app finds them on its own — in the usual directories or via your login shell PATH
+  (nvm installs work too).
+- An Apple Developer account to sign the app and the widget (App Groups require signing).
+
+### 1. Configure signing
+Copy the template and put in your Team ID and a bundle ID prefix:
+
+```bash
+cp Config/Local.example.xcconfig Config/Local.xcconfig
+```
+
+```
+DEVELOPMENT_TEAM = ABCDE12345     // Xcode → Settings → Accounts
+BUNDLE_ID_PREFIX = com.yourname
+```
+
+`Config/Local.xcconfig` is ignored by git. Bundle identifiers and the App Group shared by the app
+and the widget are derived from these two values.
+
+### 2. Build
+Open the project in Xcode 16+ and build the `AI Quota Studio` scheme, or run:
+
+```bash
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+xcodebuild -project "AI Quota Studio.xcodeproj" -scheme "AI Quota Studio" -configuration Release build
+```
+
+### 3. Run
+1. Launch **AI Quota Studio**.
+2. In Settings, turn on *Launch at login* and pick the interface language if needed.
+3. Right-click the desktop → **Edit Widgets** → choose **AI Quota Studio**.
+
+---
+
+## 🛠 How it works
+
+```
+AI Quota Studio (menu bar app)
+  ├─ ClaudeCollector ──→ `claude -p /usage`
+  ├─ AntigravityCollector ──→ `agy -p /usage`
+  ├─ CodexCollector ──→ `codex app-server` (account/rateLimits/read)
+  └─ QuotaBridge ──→ saves to the App Group and reloads WidgetKit
+Desktop widgets (WidgetKit)
+  └─ read the App Group container and redraw the bars
+```
+
+The app never talks to Anthropic, Google or OpenAI itself and stores no tokens: it asks the
+installed CLIs, which use your existing sign-in.
+
+---
+
+## 📄 License
+
+MIT — see [LICENSE](LICENSE).

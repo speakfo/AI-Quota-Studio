@@ -1,0 +1,7 @@
+// Copy to Local.xcconfig (ignored by git) and fill in your values.
+
+// Your Apple Developer Team ID: Xcode → Settings → Accounts, or developer.apple.com → Membership.
+DEVELOPMENT_TEAM = ABCDE12345
+
+// Reverse-DNS prefix for bundle identifiers, e.g. com.yourname.
+BUNDLE_ID_PREFIX = com.yourname

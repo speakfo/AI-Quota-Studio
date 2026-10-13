@@ -1,0 +1,13 @@
+// Signing and identifiers shared by both targets.
+//
+// Do not put personal values here: copy Local.example.xcconfig to
+// Local.xcconfig (ignored by git) and set your team and bundle ID prefix there.
+
+DEVELOPMENT_TEAM =
+BUNDLE_ID_PREFIX = com.example
+
+#include? "Local.xcconfig"
+
+// App Group shared by the app and the widget. Referenced from both
+// .entitlements files and exposed to code via the AIQuotaAppGroup Info.plist key.
+APP_GROUP_ID = $(DEVELOPMENT_TEAM).$(BUNDLE_ID_PREFIX).AIQuota
