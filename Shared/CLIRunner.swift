@@ -93,6 +93,13 @@ enum CLIRunner {
     ///   - timeout: wall-clock limit; after it the process is killed.
     ///   - isComplete: for long-lived processes: once stdout satisfies it, the
     ///     process is killed and the collected output is returned.
+    /// An empty directory of our own to run CLIs in.
+    private static let workingDirectory: URL = {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("AIQuotaCLI", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }()
+
     static func run(
         binary: String,
         arguments: [String],
@@ -105,7 +112,9 @@ enum CLIRunner {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: binary)
         process.arguments = arguments
-        process.currentDirectoryURL = home
+        // Not the home directory: `claude` looks around its working directory, and
+        // from `~` it touches ~/Documents, which pops up a privacy prompt.
+        process.currentDirectoryURL = workingDirectory
         process.environment = environment(home: home.path, binary: binary)
 
         let stdin = input.map { _ in Pipe() }

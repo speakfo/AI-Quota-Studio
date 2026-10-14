@@ -4,9 +4,9 @@
 <dict>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
-	<key>com.apple.security.application-groups</key>
+	<key>com.apple.security.temporary-exception.files.home-relative-path.read-only</key>
 	<array>
-		<string>$(APP_GROUP_ID)</string>
+		<string>/Library/Application Support/AIQuota/</string>
 	</array>
 </dict>
 </plist>

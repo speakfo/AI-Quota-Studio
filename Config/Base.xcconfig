@@ -1,13 +1,15 @@
 // Signing and identifiers shared by both targets.
 //
 // Do not put personal values here: copy Local.example.xcconfig to
-// Local.xcconfig (ignored by git) and set your team and bundle ID prefix there.
+// Local.xcconfig (ignored by git) and override what you need there.
 
+// Ad-hoc signing ("Sign to Run Locally"): no Apple Developer account needed.
+// Nothing requires a Team ID: the app and the widget share data through
+// ~/Library/Application Support/AIQuota, not an App Group.
 DEVELOPMENT_TEAM =
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = -
+
 BUNDLE_ID_PREFIX = com.example
 
 #include? "Local.xcconfig"
-
-// App Group shared by the app and the widget. Referenced from both
-// .entitlements files and exposed to code via the AIQuotaAppGroup Info.plist key.
-APP_GROUP_ID = $(DEVELOPMENT_TEAM).$(BUNDLE_ID_PREFIX).AIQuota

@@ -2,7 +2,7 @@
 //  QuotaStore.swift
 //  Shared
 //
-//  Quota cache storage in the shared App Group container.
+//  Quota cache storage shared by the app and the widget.
 //
 
 import Foundation
@@ -39,19 +39,25 @@ enum QuotaLoadResult {
 }
 
 enum QuotaStore {
-    /// From the AIQuotaAppGroup Info.plist key, filled from APP_GROUP_ID in Config/Base.xcconfig.
-    nonisolated static let appGroupID = Bundle.main.object(forInfoDictionaryKey: "AIQuotaAppGroup") as? String ?? ""
-    /// Subdirectory inside the container, to keep its root clean.
+    /// Subdirectory of Application Support shared by the app and the widget.
     static let directoryName = "AIQuota"
     /// Past this threshold data is considered stale and flagged in the UI.
     static let staleThreshold: TimeInterval = 6 * 60 * 60
 
-    /// The App Group directory is the only place both the app and the
-    /// sandboxed widget can see. nil if the target lacks the entitlement
-    /// `com.apple.security.application-groups`.
-    static var directory: URL? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupID)?
-            .appendingPathComponent(directoryName, isDirectory: true)
+    /// `~/Library/Application Support/AIQuota`. The app is not sandboxed and
+    /// writes here; the sandboxed widget reads it through the
+    /// `temporary-exception.files.home-relative-path.read-only` entitlement.
+    /// An App Group would need a Team ID, which an ad-hoc signed build lacks:
+    /// macOS silently denies access to the group container.
+    nonisolated static let directory: URL? = realHomeDirectory?
+        .appendingPathComponent("Library/Application Support", isDirectory: true)
+        .appendingPathComponent(directoryName, isDirectory: true)
+
+    /// The user's home even inside the sandbox, where `NSHomeDirectory()`
+    /// points to the widget's container.
+    nonisolated private static var realHomeDirectory: URL? {
+        guard let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir else { return nil }
+        return URL(fileURLWithPath: String(cString: dir), isDirectory: true)
     }
 
     static func load(_ provider: QuotaProvider, now: Date = Date()) -> QuotaLoadResult {
@@ -70,7 +76,7 @@ enum QuotaStore {
         write(snapshot, to: provider.fileName)
     }
 
-    /// Errors go to the App Group so the widget sees them too, not just the menu.
+    /// Errors go to the shared directory so the widget sees them too, not just the menu.
     static func saveError(_ error: CollectorError?, provider: QuotaProvider) {
         if let error {
             write(error, to: provider.errorFileName)

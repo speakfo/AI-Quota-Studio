@@ -30,22 +30,21 @@ that show 5-hour, weekly and monthly quota usage for **Claude Code**, **Antigrav
 - Installed and signed-in CLIs: `claude` (Claude Code), `agy` (Antigravity) and/or `codex`
   (Codex). The app finds them on its own — in the usual directories or via your login shell PATH
   (nvm installs work too).
-- An Apple Developer account to sign the app and the widget (App Groups require signing).
+- Xcode 16+. No Apple Developer account is needed: the build is signed ad-hoc.
 
-### 1. Configure signing
-Copy the template and put in your Team ID and a bundle ID prefix:
+### 1. Configure (optional)
+Copy the template and put in your bundle ID prefix:
 
 ```bash
 cp Config/Local.example.xcconfig Config/Local.xcconfig
 ```
 
 ```
-DEVELOPMENT_TEAM = ABCDE12345     // Xcode → Settings → Accounts
 BUNDLE_ID_PREFIX = com.yourname
 ```
 
-`Config/Local.xcconfig` is ignored by git. Bundle identifiers and the App Group shared by the app
-and the widget are derived from these two values.
+If you have an Apple Developer team, you can also enable team signing there: macOS then keeps
+privacy permissions across rebuilds. `Config/Local.xcconfig` is ignored by git.
 
 ### 2. Build
 Open the project in Xcode 16+ and build the `AI Quota Studio` scheme, or run:
@@ -69,9 +68,9 @@ AI Quota Studio (menu bar app)
   ├─ ClaudeCollector ──→ `claude -p /usage`
   ├─ AntigravityCollector ──→ `agy -p /usage`
   ├─ CodexCollector ──→ `codex app-server` (account/rateLimits/read)
-  └─ QuotaBridge ──→ saves to the App Group and reloads WidgetKit
+  └─ QuotaBridge ──→ saves to ~/Library/Application Support/AIQuota and reloads WidgetKit
 Desktop widgets (WidgetKit)
-  └─ read the App Group container and redraw the bars
+  └─ read the same directory (read-only) and redraw the bars
 ```
 
 The app never talks to Anthropic, Google or OpenAI itself and stores no tokens: it asks the

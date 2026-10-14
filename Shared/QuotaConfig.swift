@@ -11,9 +11,8 @@ enum QuotaConfig {
     static let defaultIntervalMinutes: Int = 5
     private static let intervalKey = "refreshIntervalMinutes"
 
-    private static var defaults: UserDefaults? {
-        UserDefaults(suiteName: QuotaStore.appGroupID)
-    }
+    /// Only the app reads this, so its own defaults are enough.
+    private static var defaults: UserDefaults? { .standard }
 
     /// Background polling interval in minutes (5 by default).
     static var refreshIntervalMinutes: Int {

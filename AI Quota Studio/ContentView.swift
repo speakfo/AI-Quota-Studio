@@ -375,8 +375,9 @@ struct SettingsView: View {
         .padding(20)
         .frame(width: 400)
         .id(language)
-        .onChange(of: language) { _, _ in
-            // The widget reads the language from the App Group on its next render.
+        .onChange(of: language) { _, newValue in
+            // Mirrors the choice to settings.json, which the widget reads on its next render.
+            L10n.language = AppLanguage(rawValue: newValue) ?? .english
             WidgetCenter.shared.reloadAllTimelines()
         }
         .navigationTitle(L10n.tr("AI Quota Studio Settings"))

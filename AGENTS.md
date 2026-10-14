@@ -23,8 +23,9 @@ available) and the language is picked in Settings, independently of the system l
 - Visible strings go through `L10n.tr("…")` / `L10n.tr("… %@", arg)` (`Shared/L10n.swift`),
   which looks up the `.lproj` of the chosen language. Use `Text(verbatim:)` for text that must
   not be localized (numbers, product names).
-- The choice is stored in the App Group defaults (`L10n.languageKey`), so the sandboxed widget
-  renders in the same language. Changing it reloads widget timelines.
+- The app keeps the choice in its own defaults (`L10n.languageKey`, drives `@AppStorage`) and
+  mirrors it to `settings.json` in the shared data directory, so the sandboxed widget renders in
+  the same language. Changing it reloads widget timelines.
 - Widget gallery names (`configurationDisplayName`, `description`) are resolved by the system
   in the system language — WidgetKit does not let the app choose.
 - `STRING_CATALOG_GENERATE_SYMBOLS` is off: keys like "No data" and "no data" would clash.
@@ -55,9 +56,9 @@ The project uses Xcode 16 synchronized groups (`PBXFileSystemSynchronizedRootGro
 - `Shared/` → models, collectors and localization, compiled into both targets
   (`ClaudeCollector`, `AntigravityCollector`, `CodexCollector`, `CLIRunner`, `CLILocator`,
   `QuotaSnapshot`, `QuotaStore`, `QuotaConfig`, `L10n`, `Localizable.xcstrings`)
-- `Config/` → signing and identifiers (`Base.xcconfig`, `Local.example.xcconfig`, `App-Info.plist`)
-- Entitlements: `Entitlements/App.entitlements`, `Entitlements/AIQuotaWidget.entitlements`
-- App Group: `$(DEVELOPMENT_TEAM).$(BUNDLE_ID_PREFIX).AIQuota`
+- `Config/` → signing and identifiers (`Base.xcconfig`, `Local.example.xcconfig`)
+- Entitlements: only the widget has them (`Entitlements/AIQuotaWidget.entitlements`)
+- Shared data: `~/Library/Application Support/AIQuota/`
 
 ## Data flow
 
@@ -67,17 +68,22 @@ AI Quota Studio (QuotaBridge, background timer with a configurable interval)
   ├─ AntigravityCollector ──→ `agy --print-timeout 30s -p /usage`
   ├─ CodexCollector ──→ `codex app-server`, JSON-RPC `account/rateLimits/read`
   │    └─ all locate the CLI via CLILocator and run it via CLIRunner
-  ├─ QuotaStore.save ──→ <App Group>/AIQuota/<provider>-quota.json
+  ├─ QuotaStore.save ──→ ~/Library/Application Support/AIQuota/<provider>-quota.json
   │                      ──→ WidgetCenter.reloadAllTimelines()
-  └─ collection error (CollectorError) ──→ <App Group>/AIQuota/<provider>-error.json,
+  └─ collection error (CollectorError) ──→ …/AIQuota/<provider>-error.json,
                                            removed on success
 Desktop widgets (WidgetKit, sandboxed)
-  └─ QuotaStore.load reads the same files from the App Group
+  └─ QuotaStore.load reads the same files (read-only sandbox exception)
 ```
 
-The App Group is the only storage: the app is not sandboxed but has the group entitlement, the
-widget is sandboxed with the same entitlement. There are no other copies. Both the menu and the
-widget read the error file: the widget shows the reason ("agy not found", "sign in to agy")
+`~/Library/Application Support/AIQuota/` is the only storage. The app is not sandboxed and writes
+there; the sandboxed widget reads it through the
+`com.apple.security.temporary-exception.files.home-relative-path.read-only` entitlement.
+`QuotaStore` finds the real home via `getpwuid`, because inside the sandbox `NSHomeDirectory()`
+is the widget's container. Do not go back to an App Group: on macOS 15+ the group container is
+only accessible when the group ID is prefixed with the app's Team ID, and an ad-hoc signed build
+has none — the system silently denies access and both the menu and the widget show "No data".
+Both the menu and the widget read the error file: the widget shows the reason ("agy not found", "sign in to agy")
 instead of "No data" or "data is stale". If a CLI is not found and there has never been data
 for it, its card is hidden from the menu. A failed attempt also waits for the interval, so a
 broken CLI is not hammered every 30 seconds.
@@ -106,18 +112,21 @@ otherwise an npm script with `#!/usr/bin/env node` cannot find node.
 ## Signing and identifiers
 
 No personal identifiers live in the repository. `Config/Base.xcconfig` (the project-level base
-configuration) defines `DEVELOPMENT_TEAM`, `BUNDLE_ID_PREFIX` and the derived `APP_GROUP_ID`, and
-includes the git-ignored `Config/Local.xcconfig` with the developer's own values (template:
-`Config/Local.example.xcconfig`).
+configuration) signs ad-hoc by default (`CODE_SIGN_IDENTITY = -`, no team), so anyone can build
+without an Apple Developer account. It includes the git-ignored `Config/Local.xcconfig` with the
+developer's own values (template: `Config/Local.example.xcconfig`): `BUNDLE_ID_PREFIX` and,
+optionally, team signing. Team signing is only a convenience — with ad-hoc signing macOS ties
+privacy permissions to the binary hash and asks again after every rebuild.
 
 - Bundle IDs: `$(BUNDLE_ID_PREFIX).AI-Quota-Studio` and `….AIQuotaWidget`.
-- Both `.entitlements` files use `$(APP_GROUP_ID)`.
-- Code reads the group from the `AIQuotaAppGroup` Info.plist key (`Config/App-Info.plist` for the
-  app, `AIQuotaWidget/Info.plist` for the widget), filled from `$(APP_GROUP_ID)` at build time —
-  see `QuotaStore.appGroupID`.
+- Do not put `DEVELOPMENT_TEAM`, `CODE_SIGN_STYLE` or bundle IDs back into target settings: they
+  would override the xcconfig.
+- Deployment target is macOS 26.5.
 
-Do not put `DEVELOPMENT_TEAM` or bundle IDs back into target settings: they would override the
-xcconfig. Deployment target is macOS 26.5.
+CLIs run with an empty temporary directory as their working directory, not `~`.
+`claude` still touches `~/Documents` on start (most likely checking project paths from
+`~/.claude.json`), so the first collection may trigger a "Documents folder" privacy prompt; while
+the prompt is unanswered, the Claude collection times out.
 
 ## Running CLIs in the background: what not to do
 
