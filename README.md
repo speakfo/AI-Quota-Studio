@@ -26,7 +26,8 @@ that show 5-hour, weekly and monthly quota usage for **Claude Code**, **Antigrav
 ## 🍺 Install
 
 ```bash
-brew install --cask speakfo/tap/ai-quota-studio
+brew tap speakfo/tap
+brew install --cask ai-quota-studio
 ```
 
 The app is signed ad-hoc and not notarized (there is no paid Apple Developer account behind it),

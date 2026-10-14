@@ -113,18 +113,19 @@ echo "==> Publishing $TAG"
 git tag "$TAG"
 git push origin "$TAG"
 gh release create "$TAG" "$BUILD/$ZIP" --repo "$REPO" --title "$APP_NAME $VERSION" \
-    --notes "Install: \`brew install --cask ${TAP_REPO%%/*}/${TAP_REPO#*/homebrew-}/$CASK\`"
+    --notes "Install: \`brew tap ${TAP_REPO%%/*}/${TAP_REPO#*/homebrew-} && brew install --cask $CASK\`"
 
 echo "==> Updating $TAP_REPO"
 TAP="$BUILD/tap"
-gh repo clone "$TAP_REPO" "$TAP" -- --quiet
+# HTTPS auth through gh (no SSH needed); same author as this repository.
+GIT_AUTH=(-c credential.helper= -c credential.helper='!gh auth git-credential')
+git "${GIT_AUTH[@]}" clone --quiet "https://github.com/$TAP_REPO.git" "$TAP"
+TAP_GIT=(git -C "$TAP" "${GIT_AUTH[@]}"
+         -c user.name="$(git config user.name)" -c user.email="$(git config user.email)")
 mkdir -p "$TAP/Casks"
 cp "$CASK_FILE" "$TAP/Casks/$CASK.rb"
-# Same author as this repository (its local config), HTTPS auth through gh.
-TAP_GIT=(git -C "$TAP" -c user.name="$(git config user.name)" -c user.email="$(git config user.email)"
-         -c credential.helper= -c credential.helper='!gh auth git-credential')
 "${TAP_GIT[@]}" add "Casks/$CASK.rb"
 "${TAP_GIT[@]}" commit --quiet -m "$CASK $VERSION"
 "${TAP_GIT[@]}" push --quiet
 
-echo "==> Done: brew install --cask ${TAP_REPO%%/*}/${TAP_REPO#*/homebrew-}/$CASK"
+echo "==> Done: brew tap ${TAP_REPO%%/*}/${TAP_REPO#*/homebrew-} && brew install --cask $CASK"
