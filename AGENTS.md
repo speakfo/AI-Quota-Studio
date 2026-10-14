@@ -48,6 +48,15 @@ xcodebuild -project "AI Quota Studio.xcodeproj" -scheme AIQuotaWidgetExtension b
 Bump `CURRENT_PROJECT_VERSION` whenever widgets change: macOS caches the widget list per build
 number and may not notice a new widget otherwise.
 
+## Releasing
+
+`scripts/release.sh` builds a universal, ad-hoc signed Release (no `get-task-allow`), zips it,
+tags `v<MARKETING_VERSION>`, creates a GitHub release and updates the cask in
+`speakfo/homebrew-tap`. Bump `MARKETING_VERSION` first; `--dry-run` only builds into
+`build/release/` and publishes nothing. There is no notarization (no paid Apple account),
+so the cask's `postflight_steps` strips `com.apple.quarantine` — otherwise Gatekeeper refuses to
+open the app. Homebrew only requires signing and notarization for the official `homebrew/cask`.
+
 ## Project layout
 
 The project uses Xcode 16 synchronized groups (`PBXFileSystemSynchronizedRootGroup`).

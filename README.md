@@ -23,7 +23,18 @@ that show 5-hour, weekly and monthly quota usage for **Claude Code**, **Antigrav
 
 ---
 
-## 🚀 Quick start
+## 🍺 Install
+
+```bash
+brew install --cask speakfo/tap/ai-quota-studio
+```
+
+The app is signed ad-hoc and not notarized (there is no paid Apple Developer account behind it),
+so the cask removes the quarantine flag after install. Prefer to build it yourself? See below.
+
+---
+
+## 🚀 Build from source
 
 ### 0. Requirements
 - macOS 26.5+.
