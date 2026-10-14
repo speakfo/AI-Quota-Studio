@@ -86,13 +86,6 @@ enum CLIRunner {
 
     // MARK: - Running
 
-    /// Runs a CLI and returns its stdout.
-    /// - Parameters:
-    ///   - input: what to write to stdin. stdin stays open until the end — servers
-    ///     like `codex app-server` exit on EOF before they get to answer.
-    ///   - timeout: wall-clock limit; after it the process is killed.
-    ///   - isComplete: for long-lived processes: once stdout satisfies it, the
-    ///     process is killed and the collected output is returned.
     /// An empty directory of our own to run CLIs in.
     private static let workingDirectory: URL = {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("AIQuotaCLI", isDirectory: true)
@@ -100,6 +93,13 @@ enum CLIRunner {
         return url
     }()
 
+    /// Runs a CLI and returns its stdout.
+    /// - Parameters:
+    ///   - input: what to write to stdin. stdin stays open until the end — servers
+    ///     like `codex app-server` exit on EOF before they get to answer.
+    ///   - timeout: wall-clock limit; after it the process is killed.
+    ///   - isComplete: for long-lived processes: once stdout satisfies it, the
+    ///     process is killed and the collected output is returned.
     static func run(
         binary: String,
         arguments: [String],
@@ -151,6 +151,8 @@ enum CLIRunner {
         }
 
         if let input, let stdin {
+            // A CLI that died before reading stdin must not take the app down with SIGPIPE.
+            _ = fcntl(stdin.fileHandleForWriting.fileDescriptor, F_SETNOSIGPIPE, 1)
             try? stdin.fileHandleForWriting.write(contentsOf: Data(input.utf8))
         }
 

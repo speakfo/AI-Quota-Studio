@@ -76,7 +76,7 @@ enum ClaudeCollector {
 
     static func parseDate(dateStr: String?, tzStr: String?) -> Date? {
         guard let dateStr = dateStr, let tzStr = tzStr,
-              let tz = TimeZone(identifier: tzStr) else { return nil }
+              let tz = TimeZone(identifier: tzStr) ?? TimeZone(abbreviation: tzStr) else { return nil }
 
         var clean = dateStr.replacingOccurrences(of: " at ", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -90,6 +90,10 @@ enum ClaudeCollector {
         let calendar = Calendar.current
         let year = calendar.component(.year, from: now)
         let fullStr = "\(clean) \(year)"
+        // The output has no year. A date far in the past means the reset is in
+        // the next year (December now, "Jan 3" parsed); a recently passed one
+        // stays as is, so the window shows as reset instead of a year away.
+        let yearRolloverThreshold: TimeInterval = 180 * 24 * 60 * 60
 
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -98,7 +102,7 @@ enum ClaudeCollector {
         // Try standard format with minutes (e.g. "Aug 28 1:39pm 2026")
         formatter.dateFormat = "MMM d h:mma yyyy"
         if var date = formatter.date(from: fullStr) {
-            if date < now.addingTimeInterval(-3600) {
+            if now.timeIntervalSince(date) > yearRolloverThreshold {
                 if let nextYear = calendar.date(byAdding: .year, value: 1, to: date) {
                     date = nextYear
                 }
@@ -115,7 +119,7 @@ enum ClaudeCollector {
         for fmt in fallbackFormats {
             formatter.dateFormat = fmt
             if var date = formatter.date(from: fullStr) {
-                if date < now.addingTimeInterval(-3600) {
+                if now.timeIntervalSince(date) > yearRolloverThreshold {
                     if let nextYear = calendar.date(byAdding: .year, value: 1, to: date) {
                         date = nextYear
                     }
