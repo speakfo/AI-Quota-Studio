@@ -110,6 +110,16 @@ the free plan only a month (`secondary: null`). The Codex menu card and widget b
 `QuotaSnapshot.codexRows`: "5 hours" is always present (without a window it is a dimmed
 "not in your plan" row), longer windows only when they arrive.
 
+## Antigravity
+
+`agy -p /usage` prints family-wide limits ("Gemini Models" / "Weekly Limit Remaining",
+"Claude and GPT models" / …) and, on top of them, limits of single models
+("Gemini 4 Argon" / "Gemini 4 Argon Weekly Limit"). A single-model line names the model in the
+window label; it goes to `QuotaSnapshot.models`, not `windows`, otherwise it would overwrite the
+family limit. The menu card and the widget show model limits as extra rows under their family
+(in the widget: medium and large; both switch to denser rows to keep the height, the small one
+has no room).
+
 ## Locating CLIs
 
 A menu bar app starts with a trimmed PATH, so `CLILocator` first checks the usual directories

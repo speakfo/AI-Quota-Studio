@@ -27,11 +27,15 @@ struct QuotaSnapshot: Codable {
     /// Who wrote it: "claude-usage", "antigravity-usage", …
     let source: String?
     let windows: [String: QuotaWindow]
+    /// Limits of single models on top of the family-wide `windows`
+    /// (Antigravity: "Gemini 4 Argon" weekly limit). nil in older files.
+    var models: [ModelQuota]? = nil
 
     private enum CodingKeys: String, CodingKey {
         case updatedAt = "updated_at"
         case source
         case windows
+        case models
     }
 
     static let fiveHourKey = "five_hour"
@@ -70,10 +74,39 @@ struct QuotaSnapshot: Codable {
 
     /// Whether there is data for Claude & GPT models (Opus, Sonnet, GPT-OSS).
     var hasClaudeGpt: Bool {
-        fiveHourClaudeGpt != nil || sevenDayClaudeGpt != nil
+        fiveHourClaudeGpt != nil || sevenDayClaudeGpt != nil || !modelQuotas(claudeGpt: true).isEmpty
+    }
+
+    /// Single-model limits of one Antigravity family, 5 hours before week.
+    func modelQuotas(claudeGpt: Bool) -> [ModelQuota] {
+        (models ?? [])
+            .filter { $0.isClaudeGpt == claudeGpt }
+            .sorted { $0.name != $1.name ? $0.name < $1.name : ($0.isFiveHour && !$1.isFiveHour) }
     }
 
     func age(now: Date = Date()) -> TimeInterval { now.timeIntervalSince(updatedAt) }
+}
+
+/// Limit of a single model, e.g. the weekly limit of "Gemini 4 Argon".
+struct ModelQuota: Codable, Identifiable {
+    let name: String
+    /// Same scheme as the `QuotaSnapshot.windows` keys: "seven_day", "five_hour_claude_gpt", …
+    let key: String
+    let window: QuotaWindow
+
+    var id: String { name + "/" + key }
+    var isClaudeGpt: Bool { key.hasSuffix("_claude_gpt") }
+    var isFiveHour: Bool { key.hasPrefix(QuotaSnapshot.fiveHourKey) }
+
+    /// "Gemini 4 Argon · 7d" in compact rows, "Gemini 4 Argon, week" in full ones.
+    func title(compact: Bool) -> String {
+        switch (compact, isFiveHour) {
+        case (true, true): return L10n.tr("%@ · 5h", name)
+        case (true, false): return L10n.tr("%@ · 7d", name)
+        case (false, true): return L10n.tr("%@, 5 hours", name)
+        case (false, false): return L10n.tr("%@, week", name)
+        }
+    }
 }
 
 /// A card row: the window and what to say when it is missing.
@@ -161,6 +194,13 @@ extension QuotaSnapshot {
                 sevenDayClaudeGptKey: QuotaWindow(
                     usedPercentage: 32,
                     resetsAt: now.addingTimeInterval(5 * 86400 + 6 * 3600)
+                )
+            ],
+            models: [
+                ModelQuota(
+                    name: "Gemini 4 Argon",
+                    key: sevenDayKey,
+                    window: QuotaWindow(usedPercentage: 79, resetsAt: now.addingTimeInterval(6 * 86400))
                 )
             ]
         )

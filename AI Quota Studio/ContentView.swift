@@ -175,7 +175,8 @@ private struct MenuBarAntigravityCard: View {
                         title: L10n.tr("Gemini models"),
                         color: .cyan,
                         fiveHour: snapshot.fiveHour,
-                        sevenDay: snapshot.sevenDay
+                        sevenDay: snapshot.sevenDay,
+                        models: snapshot.modelQuotas(claudeGpt: false)
                     )
 
                     if snapshot.hasClaudeGpt {
@@ -186,7 +187,8 @@ private struct MenuBarAntigravityCard: View {
                             title: L10n.tr("Claude and GPT models"),
                             color: Self.claudeGptColor,
                             fiveHour: snapshot.fiveHourClaudeGpt,
-                            sevenDay: snapshot.sevenDayClaudeGpt
+                            sevenDay: snapshot.sevenDayClaudeGpt,
+                            models: snapshot.modelQuotas(claudeGpt: true)
                         )
                     }
                 }
@@ -206,6 +208,8 @@ private struct MenuBarAntigravityCard: View {
         let color: Color
         let fiveHour: QuotaWindow?
         let sevenDay: QuotaWindow?
+        /// Single-model limits ("Gemini 4 Argon"), one full-width line each.
+        let models: [ModelQuota]
 
         var body: some View {
             VStack(alignment: .leading, spacing: 4) {
@@ -220,6 +224,9 @@ private struct MenuBarAntigravityCard: View {
                     Divider()
                         .frame(height: 28)
                     QuotaMetricColumn(label: L10n.tr("7 days"), window: sevenDay)
+                }
+                ForEach(models) { model in
+                    QuotaMetricColumn(label: model.title(compact: false), window: model.window)
                 }
             }
         }

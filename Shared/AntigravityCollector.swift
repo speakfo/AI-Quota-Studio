@@ -56,28 +56,30 @@ enum AntigravityCollector {
         }
 
         // 2. Parse TSV lines
-        var windows: [String: QuotaWindow] = [:]
+        var limits = Limits()
         for line in text.components(separatedBy: .newlines) {
             let cols = line.components(separatedBy: "\t").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             guard cols.count >= 3 else { continue }
 
             // The header line and anything that is not a percentage are filtered out here.
             let remainingStr = cols[2].replacingOccurrences(of: "%", with: "").trimmingCharacters(in: .whitespaces)
-            guard let remaining = Double(remainingStr),
-                  let key = windowKey(family: cols[0], window: cols[1]) else { continue }
+            guard let remaining = Double(remainingStr) else { continue }
 
-            windows[key] = QuotaWindow(
-                usedPercentage: usedPercent(remainingFraction: remaining / 100),
-                resetsAt: cols.count >= 4 ? parseDate(cols[3]) : nil
+            limits.add(
+                family: cols[0],
+                window: cols[1],
+                QuotaWindow(
+                    usedPercentage: usedPercent(remainingFraction: remaining / 100),
+                    resetsAt: cols.count >= 4 ? parseDate(cols[3]) : nil
+                )
             )
         }
 
-        guard !windows.isEmpty else { return nil }
-        return QuotaSnapshot(updatedAt: Date(), source: "antigravity-usage", windows: windows)
+        return limits.snapshot
     }
 
     private static func parseJsonGroups(_ groups: [[String: Any]]) -> QuotaSnapshot? {
-        var windows: [String: QuotaWindow] = [:]
+        var limits = Limits()
 
         for group in groups {
             guard let name = group["name"] as? String,
@@ -85,21 +87,50 @@ enum AntigravityCollector {
 
             for bucket in buckets {
                 guard let window = bucket["window"] as? String,
-                      let remainingFraction = bucket["remaining_fraction"] as? Double,
-                      let key = windowKey(family: name, window: window) else { continue }
+                      let remainingFraction = bucket["remaining_fraction"] as? Double else { continue }
 
-                windows[key] = QuotaWindow(
-                    usedPercentage: usedPercent(remainingFraction: remainingFraction),
-                    resetsAt: (bucket["reset_time"] as? String).flatMap { parseDate($0) }
+                limits.add(
+                    family: name,
+                    window: window,
+                    QuotaWindow(
+                        usedPercentage: usedPercent(remainingFraction: remainingFraction),
+                        resetsAt: (bucket["reset_time"] as? String).flatMap { parseDate($0) }
+                    )
                 )
             }
         }
 
-        guard !windows.isEmpty else { return nil }
-        return QuotaSnapshot(updatedAt: Date(), source: "antigravity-usage", windows: windows)
+        return limits.snapshot
     }
 
     // MARK: - Shared parsing rules
+
+    /// Family-wide limits ("Gemini Models" / "Weekly Limit Remaining") go to `windows`.
+    /// Per-model limits ("Gemini 4 Argon" / "Gemini 4 Argon Weekly Limit") name the model
+    /// in the window label and go to `models`: they must not overwrite the family's limit.
+    private struct Limits {
+        var windows: [String: QuotaWindow] = [:]
+        var models: [ModelQuota] = []
+
+        mutating func add(family: String, window: String, _ quota: QuotaWindow) {
+            guard let key = windowKey(family: family, window: window) else { return }
+            if window.localizedCaseInsensitiveContains(family) {
+                models.append(ModelQuota(name: family, key: key, window: quota))
+            } else {
+                windows[key] = quota
+            }
+        }
+
+        var snapshot: QuotaSnapshot? {
+            guard !windows.isEmpty else { return nil }
+            return QuotaSnapshot(
+                updatedAt: Date(),
+                source: "antigravity-usage",
+                windows: windows,
+                models: models.isEmpty ? nil : models
+            )
+        }
+    }
 
     /// Key in `QuotaSnapshot.windows`: Gemini models go to the main windows,
     /// Claude/GPT to the `_claude_gpt` ones. nil — skip the line.

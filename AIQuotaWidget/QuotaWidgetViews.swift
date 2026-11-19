@@ -57,6 +57,7 @@ struct QuotaRowView: View {
                 Text(title)
                     .font(.system(size: compact ? 10 : 11, weight: .semibold))
                     .foregroundColor(.white)
+                    .lineLimit(1)
                 Spacer()
                 // Show usage, like /usage in Claude Code, so the numbers match
                 // and nobody has to subtract in their head.
@@ -119,6 +120,7 @@ struct CompactQuotaRowView: View {
                 Text(title)
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundColor(.white)
+                    .lineLimit(1)
                 if let countdown = status.map({ QuotaFormat.countdown(to: $0.resetsAt, now: now) }), countdown != "—" {
                     Text(verbatim: "· \(countdown)")
                         .font(.system(size: 8))
@@ -202,6 +204,36 @@ struct AntigravityQuotaCardView: View {
 
     private var compact: Bool { family == .systemSmall }
 
+    /// One model family: its 5-hour and weekly limits plus single-model limits.
+    private struct ModelGroup {
+        let title: String
+        let color: Color
+        let fiveHour: QuotaWindow?
+        let sevenDay: QuotaWindow?
+        let models: [ModelQuota]
+    }
+
+    private static let claudeGptColor = Color(red: 0.85, green: 0.65, blue: 0.95)
+
+    private func modelGroups(_ snapshot: QuotaSnapshot?) -> [ModelGroup] {
+        [
+            ModelGroup(
+                title: L10n.tr("Gemini models"),
+                color: .cyan,
+                fiveHour: snapshot?.fiveHour,
+                sevenDay: snapshot?.sevenDay,
+                models: snapshot?.modelQuotas(claudeGpt: false) ?? []
+            ),
+            ModelGroup(
+                title: L10n.tr("Claude and GPT models"),
+                color: Self.claudeGptColor,
+                fiveHour: snapshot?.fiveHourClaudeGpt,
+                sevenDay: snapshot?.sevenDayClaudeGpt,
+                models: snapshot?.modelQuotas(claudeGpt: true) ?? []
+            )
+        ]
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: compact ? 3 : (family == .systemLarge ? 14 : 8)) {
             // Widget title (large, to stand out above the model groups)
@@ -216,162 +248,88 @@ struct AntigravityQuotaCardView: View {
             if case .missing = entry.result {
                 MissingDataView(compact: compact, error: entry.error)
             } else {
-                let snapshot = entry.result.snapshot
+                let groups = modelGroups(entry.result.snapshot)
 
                 switch family {
                 case .systemSmall:
                     VStack(alignment: .leading, spacing: 4) {
-                        // Gemini models block
-                        VStack(alignment: .leading, spacing: 1) {
-                            HStack(spacing: 3) {
-                                Circle().fill(Color.cyan).frame(width: 4, height: 4)
-                                Text(L10n.tr("Gemini models"))
-                                    .font(.system(size: 9.5, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .lineLimit(1)
-                            }
-                            CompactQuotaRowView(
-                                title: L10n.tr("5h"),
-                                status: snapshot?.fiveHour?.status(now: entry.date),
-                                now: entry.date
-                            )
-                            CompactQuotaRowView(
-                                title: L10n.tr("7d"),
-                                status: snapshot?.sevenDay?.status(now: entry.date),
-                                now: entry.date
-                            )
-                        }
-
-                        // Claude and GPT models block
-                        VStack(alignment: .leading, spacing: 1) {
-                            HStack(spacing: 3) {
-                                Circle().fill(Color(red: 0.85, green: 0.65, blue: 0.95)).frame(width: 4, height: 4)
-                                Text(L10n.tr("Claude and GPT models"))
-                                    .font(.system(size: 9.5, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.75)
-                            }
-                            CompactQuotaRowView(
-                                title: L10n.tr("5h"),
-                                status: snapshot?.fiveHourClaudeGpt?.status(now: entry.date),
-                                now: entry.date
-                            )
-                            CompactQuotaRowView(
-                                title: L10n.tr("7d"),
-                                status: snapshot?.sevenDayClaudeGpt?.status(now: entry.date),
-                                now: entry.date
-                            )
+                        ForEach(groups.indices, id: \.self) { index in
+                            smallGroup(groups[index])
                         }
                     }
 
                 case .systemMedium:
+                    // Model limits make a third row; full rows would not fit the height.
+                    let dense = groups.contains { !$0.models.isEmpty }
                     HStack(alignment: .top, spacing: 12) {
-                        // Gemini models column
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack(spacing: 4) {
-                                Circle().fill(Color.cyan).frame(width: 5, height: 5)
-                                Text(L10n.tr("Gemini models"))
-                                    .font(.system(size: 11.5, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .lineLimit(1)
-                            }
-                            QuotaRowView(
-                                title: L10n.tr("5 hours"),
-                                status: snapshot?.fiveHour?.status(now: entry.date),
-                                now: entry.date,
-                                compact: true
-                            )
-                            QuotaRowView(
-                                title: L10n.tr("Week"),
-                                status: snapshot?.sevenDay?.status(now: entry.date),
-                                now: entry.date,
-                                compact: true
-                            )
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
+                        mediumGroup(groups[0], dense: dense)
                         Divider()
                             .opacity(0.2)
-
-                        // Claude and GPT models column
-                        VStack(alignment: .leading, spacing: 5) {
-                            HStack(spacing: 4) {
-                                Circle().fill(Color(red: 0.85, green: 0.65, blue: 0.95)).frame(width: 5, height: 5)
-                                Text(L10n.tr("Claude and GPT models"))
-                                    .font(.system(size: 11.5, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .lineLimit(1)
-                                    .minimumScaleFactor(0.85)
-                            }
-                            QuotaRowView(
-                                title: L10n.tr("5 hours"),
-                                status: snapshot?.fiveHourClaudeGpt?.status(now: entry.date),
-                                now: entry.date,
-                                compact: true
-                            )
-                            QuotaRowView(
-                                title: L10n.tr("Week"),
-                                status: snapshot?.sevenDayClaudeGpt?.status(now: entry.date),
-                                now: entry.date,
-                                compact: true
-                            )
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        mediumGroup(groups[1], dense: dense)
                     }
 
                 default:
                     // Large
+                    // Model limits add rows: switch every row to the compact style to keep the height.
+                    let dense = groups.contains { !$0.models.isEmpty }
                     VStack(alignment: .leading, spacing: 14) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(spacing: 6) {
-                                Circle().fill(Color.cyan).frame(width: 6, height: 6)
-                                Text(L10n.tr("Gemini models"))
-                                    .font(.system(size: 13.5, weight: .semibold))
-                                    .foregroundColor(.cyan)
-                            }
-                            QuotaRowView(
-                                title: L10n.tr("5 hours"),
-                                status: snapshot?.fiveHour?.status(now: entry.date),
-                                now: entry.date,
-                                compact: false
-                            )
-                            QuotaRowView(
-                                title: L10n.tr("Week"),
-                                status: snapshot?.sevenDay?.status(now: entry.date),
-                                now: entry.date,
-                                compact: false
-                            )
-                        }
-
+                        largeGroup(groups[0], dense: dense)
                         Divider()
                             .opacity(0.3)
-
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack(spacing: 6) {
-                                Circle().fill(Color(red: 0.85, green: 0.65, blue: 0.95)).frame(width: 6, height: 6)
-                                Text(L10n.tr("Claude and GPT models"))
-                                    .font(.system(size: 13.5, weight: .semibold))
-                                    .foregroundColor(Color(red: 0.85, green: 0.65, blue: 0.95))
-                            }
-                            QuotaRowView(
-                                title: L10n.tr("5 hours"),
-                                status: snapshot?.fiveHourClaudeGpt?.status(now: entry.date),
-                                now: entry.date,
-                                compact: false
-                            )
-                            QuotaRowView(
-                                title: L10n.tr("Week"),
-                                status: snapshot?.sevenDayClaudeGpt?.status(now: entry.date),
-                                now: entry.date,
-                                compact: false
-                            )
-                        }
+                        largeGroup(groups[1], dense: dense)
                     }
                 }
             }
 
             Spacer(minLength: 0)
+        }
+    }
+
+    private func groupHeader(_ group: ModelGroup, dot: CGFloat, fontSize: CGFloat, tinted: Bool, minScale: CGFloat = 1) -> some View {
+        HStack(spacing: dot - 1) {
+            Circle().fill(group.color).frame(width: dot, height: dot)
+            Text(group.title)
+                .font(.system(size: fontSize, weight: .semibold))
+                .foregroundColor(tinted ? group.color : .white)
+                .lineLimit(1)
+                .minimumScaleFactor(minScale)
+        }
+    }
+
+    /// Small: no room for model rows, only the family limits.
+    private func smallGroup(_ group: ModelGroup) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            groupHeader(group, dot: 4, fontSize: 9.5, tinted: false, minScale: 0.75)
+            CompactQuotaRowView(title: L10n.tr("5h"), status: group.fiveHour?.status(now: entry.date), now: entry.date)
+            CompactQuotaRowView(title: L10n.tr("7d"), status: group.sevenDay?.status(now: entry.date), now: entry.date)
+        }
+    }
+
+    private func mediumGroup(_ group: ModelGroup, dense: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            groupHeader(group, dot: 5, fontSize: 11.5, tinted: false, minScale: 0.85)
+            if dense {
+                CompactQuotaRowView(title: L10n.tr("5h"), status: group.fiveHour?.status(now: entry.date), now: entry.date)
+                CompactQuotaRowView(title: L10n.tr("7d"), status: group.sevenDay?.status(now: entry.date), now: entry.date)
+                ForEach(group.models) { model in
+                    CompactQuotaRowView(title: model.title(compact: true), status: model.window.status(now: entry.date), now: entry.date)
+                }
+            } else {
+                QuotaRowView(title: L10n.tr("5 hours"), status: group.fiveHour?.status(now: entry.date), now: entry.date, compact: true)
+                QuotaRowView(title: L10n.tr("Week"), status: group.sevenDay?.status(now: entry.date), now: entry.date, compact: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func largeGroup(_ group: ModelGroup, dense: Bool) -> some View {
+        VStack(alignment: .leading, spacing: dense ? 6 : 8) {
+            groupHeader(group, dot: 6, fontSize: 13.5, tinted: true)
+            QuotaRowView(title: L10n.tr("5 hours"), status: group.fiveHour?.status(now: entry.date), now: entry.date, compact: dense)
+            QuotaRowView(title: L10n.tr("Week"), status: group.sevenDay?.status(now: entry.date), now: entry.date, compact: dense)
+            ForEach(group.models) { model in
+                QuotaRowView(title: model.title(compact: false), status: model.window.status(now: entry.date), now: entry.date, compact: true)
+            }
         }
     }
 }
