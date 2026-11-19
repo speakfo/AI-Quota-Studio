@@ -29,29 +29,36 @@ enum CLIRunner {
 
     private static let shimDirectoryName = "AIQuotaNoBrowser"
 
+    private static let shimScriptBody = """
+    #!/bin/sh
+    # AI Quota Studio stub: the background quota collector must not open
+    # a browser. Without it, agy opened a Google sign-in tab whenever its
+    # silent auth failed.
+    exit 0
+    """
+
     /// Directory with the stub `open`, placed first in `PATH`.
-    private static let shimDirectory: URL? = {
-        let directory = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-            .appendingPathComponent(shimDirectoryName, isDirectory: true)
+    /// Stored under `Application Support/AIQuota` (not `$TMPDIR`, which macOS
+    /// `dirhelper` purges after 3 days) and verified before every CLI run.
+    private static func ensureShimDirectory() -> URL? {
+        let base = QuotaStore.directory ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        let directory = base.appendingPathComponent(shimDirectoryName, isDirectory: true)
         let script = directory.appendingPathComponent("open")
-        let body = """
-        #!/bin/sh
-        # AI Quota Studio stub: the background quota collector must not open
-        # a browser. Without it, agy opened a Google sign-in tab whenever its
-        # silent auth failed.
-        exit 0
-        """
+
+        if FileManager.default.isExecutableFile(atPath: script.path) {
+            return directory
+        }
 
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            try body.write(to: script, atomically: true, encoding: .utf8)
+            try shimScriptBody.write(to: script, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
             return directory
         } catch {
             logger.error("Failed to create the open stub: \(error.localizedDescription)")
             return nil
         }
-    }()
+    }
 
     // MARK: - Registry of running processes
 
@@ -87,11 +94,11 @@ enum CLIRunner {
     // MARK: - Running
 
     /// An empty directory of our own to run CLIs in.
-    private static let workingDirectory: URL = {
+    private static func ensureWorkingDirectory() -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("AIQuotaCLI", isDirectory: true)
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
-    }()
+    }
 
     /// Runs a CLI and returns its stdout.
     /// - Parameters:
@@ -114,7 +121,7 @@ enum CLIRunner {
         process.arguments = arguments
         // Not the home directory: `claude` looks around its working directory, and
         // from `~` it touches ~/Documents, which pops up a privacy prompt.
-        process.currentDirectoryURL = workingDirectory
+        process.currentDirectoryURL = ensureWorkingDirectory()
         process.environment = environment(home: home.path, binary: binary)
 
         let stdin = input.map { _ in Pipe() }
@@ -190,10 +197,11 @@ enum CLIRunner {
 
     private static func environment(home: String, binary: String) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
+        let shimDir = ensureShimDirectory()
 
         var parts: [String] = []
         // The stub goes first to shadow the system /usr/bin/open.
-        if let shim = shimDirectory?.path {
+        if let shim = shimDir?.path {
             parts.append(shim)
         }
         // The CLI's own directory: npm installs via nvm keep node next to it,
@@ -207,7 +215,7 @@ enum CLIRunner {
         env["PATH"] = parts.joined(separator: ":")
         env["HOME"] = home
         // Some CLIs open links via $BROWSER, bypassing `open`.
-        if let shim = shimDirectory?.appendingPathComponent("open").path {
+        if let shim = shimDir?.appendingPathComponent("open").path {
             env["BROWSER"] = shim
         }
         return env

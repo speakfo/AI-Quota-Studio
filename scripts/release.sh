@@ -53,12 +53,12 @@ echo "==> Building"
 rm -rf "$BUILD"
 # Ad-hoc signature whatever Local.xcconfig says; no get-task-allow in a release.
 xcodebuild -project "$APP_NAME.xcodeproj" -scheme "$APP_NAME" -configuration Release \
-    -derivedDataPath "$BUILD/DerivedData" -destination "generic/platform=macOS" \
+    -derivedDataPath "$BUILD/DerivedData.noindex" -destination "generic/platform=macOS" \
     DEVELOPMENT_TEAM= CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- \
     CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
     clean build -quiet
 
-APP="$BUILD/DerivedData/Build/Products/Release/$APP_NAME.app"
+APP="$BUILD/DerivedData.noindex/Build/Products/Release/$APP_NAME.app"
 codesign --verify --deep --strict "$APP"
 if codesign -d --entitlements - "$APP" "$APP/Contents/PlugIns/"*.appex 2>/dev/null | grep -q get-task-allow; then
     echo "error: get-task-allow in the release build" >&2
@@ -70,7 +70,8 @@ ditto -c -k --keepParent "$APP" "$BUILD/$ZIP"
 SHA256="$(shasum -a 256 "$BUILD/$ZIP" | awk '{ print $1 }')"
 echo "    sha256 $SHA256"
 
-# The build is not registered anywhere, so Spotlight does not show a second copy.
+# Not registered with LaunchServices, and .noindex keeps Spotlight out of DerivedData:
+# otherwise search shows a second copy next to /Applications.
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
     -u "$APP" 2>/dev/null || true
 
